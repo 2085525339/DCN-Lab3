@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import os
 import socket
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, urlsplit
@@ -14,6 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 HOST = os.getenv("FS_HOST", "0.0.0.0")
 PORT = int(os.getenv("FS_PORT", "9090"))
 UDP_TIMEOUT = float(os.getenv("FS_UDP_TIMEOUT", "3"))
+REGISTER_RETRY_SECONDS = float(os.getenv("FS_REGISTER_RETRY_SECONDS", "3"))
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -68,6 +71,31 @@ def _register_with_as(payload: dict[str, object]) -> None:
     response = _udp_exchange(as_ip, as_port, message).strip()
     if response != "OK":
         raise ConnectionError(f"AS rejected registration: {response or '<empty>'}")
+
+
+def _auto_register() -> None:
+    """Optionally register this FS with AS when deployed in Kubernetes."""
+    hostname = os.getenv("FS_REGISTER_HOSTNAME")
+    ip = os.getenv("FS_REGISTER_IP")
+    as_ip = os.getenv("FS_REGISTER_AS_IP")
+    as_port = os.getenv("FS_REGISTER_AS_PORT")
+    if not all((hostname, ip, as_ip, as_port)):
+        return
+
+    payload: dict[str, object] = {
+        "hostname": hostname,
+        "ip": ip,
+        "as_ip": as_ip,
+        "as_port": as_port,
+    }
+    while True:
+        try:
+            _register_with_as(payload)
+            print(f"FS registered {hostname} with AS at {as_ip}:{as_port}")
+            return
+        except (ConnectionError, OSError, ValueError, TypeError) as exc:
+            print(f"FS registration retry: {exc}")
+            time.sleep(REGISTER_RETRY_SECONDS)
 
 
 class FibonacciHandler(BaseHTTPRequestHandler):
@@ -129,6 +157,7 @@ class FibonacciHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    threading.Thread(target=_auto_register, daemon=True).start()
     with ThreadedHTTPServer((HOST, PORT), FibonacciHandler) as server:
         print(f"FS listening on HTTP {HOST}:{PORT}")
         server.serve_forever()
@@ -136,4 +165,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

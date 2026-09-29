@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dcn-as
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dcn-as
+  template:
+    metadata:
+      labels:
+        app: dcn-as
+    spec:
+      containers:
+        - name: dcn-as
+          image: jianshuliu/dcn-as:latest
+          imagePullPolicy: Always
+          ports:
+            - name: dns
+              containerPort: 53533
+              protocol: UDP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dcn-as
+spec:
+  type: NodePort
+  selector:
+    app: dcn-as
+  ports:
+    - name: dns
+      port: 53533
+      targetPort: 53533
+      nodePort: 30001
+      protocol: UDP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dcn-fs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dcn-fs
+  template:
+    metadata:
+      labels:
+        app: dcn-fs
+    spec:
+      containers:
+        - name: dcn-fs
+          image: jianshuliu/dcn-fs:latest
+          imagePullPolicy: Always
+          env:
+            - name: FS_REGISTER_HOSTNAME
+              value: fibonacci.com
+            - name: FS_REGISTER_IP
+              value: dcn-fs
+            - name: FS_REGISTER_AS_IP
+              value: dcn-as
+            - name: FS_REGISTER_AS_PORT
+              value: "53533"
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dcn-fs
+spec:
+  type: NodePort
+  selector:
+    app: dcn-fs
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+      nodePort: 30002
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dcn-us
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dcn-us
+  template:
+    metadata:
+      labels:
+        app: dcn-us
+    spec:
+      containers:
+        - name: dcn-us
+          image: jianshuliu/dcn-us:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dcn-us
+spec:
+  type: NodePort
+  selector:
+    app: dcn-us
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30003
+      protocol: TCP

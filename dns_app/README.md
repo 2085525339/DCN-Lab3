@@ -80,3 +80,23 @@ US request. Do not use `127.0.0.1` to refer to another container.
 - Commit the final `dns_app` directory to GitHub.
 - Zip the complete `dns_app` directory for Brightspace submission.
 
+## Extra Credit: Kubernetes
+
+The repository root contains `deploy_dns.yml`, which deploys all three services
+and exposes them with the required NodePorts:
+
+- AS: `30001` (UDP)
+- FS: `30002` (TCP)
+- US: `30003` (TCP)
+
+The manifest uses the Docker Hub images `jianshuliu/dcn-as`,
+`jianshuliu/dcn-fs`, and `jianshuliu/dcn-us`. After pushing those images, run:
+
+```bash
+kubectl apply -f deploy_dns.yml
+kubectl get pods,svc
+```
+
+The FS deployment automatically registers `fibonacci.com` with AS using the
+internal Kubernetes service names. The US endpoint can then be called from
+inside the cluster with `as_ip=dcn-as`, `as_port=53533`, and `fs_port=9090`.
